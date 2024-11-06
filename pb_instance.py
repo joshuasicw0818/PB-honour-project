@@ -27,13 +27,19 @@ class PB:
     def rank(self, voter, project):
         return self.pp[voter].index(project)+1
     
+    #generate all possible feasible subsets of projects
     def generate_f(self):
         possible_s = []
-        for i in range(1, len(self.A)+1):
-            s = list(itertools.combinations(self.A, i))
-            if self.cS(s) <= self.L:
-                possible_s.extend(s)
+        for i in range(0, len(self.A)+1):
+            for subset in itertools.combinations(self.A, i):
+                s_cost = self.cS(subset)
+                
+                if s_cost <= self.L:
+                    possible_s.append(subset)
+                elif s_cost > self.L:
+                    break
         return possible_s
+    
 
 
 

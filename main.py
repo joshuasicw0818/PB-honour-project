@@ -63,4 +63,4 @@ def parse_pb_file(filename):
 metadata, projects, voters = parse_pb_file('datasets/worldwide_mechanical-turk_ranking-value-7_.pb')
 
 pb = PB(metadata, projects, voters)
-print(pb.rank("1575", "21"))
+print(len(pb.generate_f()))
