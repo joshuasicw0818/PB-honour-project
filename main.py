@@ -2,6 +2,9 @@ import pandas as pd
 import numpy as np
 
 from pb_instance import PB
+from rules.atr import ATR
+from rules.pbcc import PBCC
+from rules.rsg import RSG
 
 def parse_pb_file(filename):
     # Initialize dictionaries and lists to store metadata, projects, and votes
@@ -63,4 +66,9 @@ def parse_pb_file(filename):
 metadata, projects, voters = parse_pb_file('datasets/worldwide_mechanical-turk_ranking-value-7_.pb')
 
 pb = PB(metadata, projects, voters)
-print(len(pb.generate_f()))
+atr = ATR("|.|")
+pbcc = PBCC()
+rsg = RSG(1, 1)
+
+print(pb.pp)
+print(rsg.apply(pb))

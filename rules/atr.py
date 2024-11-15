@@ -1,4 +1,4 @@
-from rule import Rule
+from rules.rule import Rule
 
 class ATR(Rule):
     def __init__(self, f):
@@ -6,13 +6,20 @@ class ATR(Rule):
 
     def apply(self, pb):
         appr_votes = {}
-        for i in pb.N:
-            appr_votes[i] = []
+        for voter in pb.N:
+            appr_votes[voter] = []
             j = 1
-            while pb.cS(appr_votes[i]) <= pb.L:
-                None
-        None
-    
+            while pb.cS(appr_votes[voter]) + pb.cS(pb.pp[voter][j-1]) <= pb.L:
+                appr_votes[voter].extend(pb.pp[voter][j-1])
+                j += 1
+            over = []
+            for p in pb.pp[voter][j-1]:
+                if pb.c(p) < pb.L - pb.cS(appr_votes[voter]):
+                    over.append(p)
+            appr_votes[voter].extend(over)
+        
+        return self.maximize(appr_votes, pb)
+
     def maximize(self, appr_votes, pb):
         #Find the feasible subset of projects that maximizes the utility function
         best_s = []
