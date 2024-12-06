@@ -6,6 +6,14 @@ import numpy as np
 
 class PB:
     def __init__(self, metadata, projects, voters):
+        """
+        Initializes the PB instance with the given metadata, projects, and voters.
+
+        Parameters:
+        - metadata: A dictionary containing metadata about the PB instance.
+        - projects: A DataFrame containing information about the projects.
+        - voters: A DataFrame containing information about the voters.
+        """
         self.projects = projects
         self.n = int(metadata['num_votes'])
         self.m = int(metadata['num_projects'])
@@ -21,13 +29,22 @@ class PB:
 
     #project cost function
     def c(self, project: str):
+        """
+        Returns the cost of the given project.
+        """
         return float(self.projects[self.projects["project_id"] == project]["cost"].values[0])
     
     #subset cost function
     def cS(self, projects: List[str]):
+        """
+        Returns the total cost of the given subset of projects.
+        """
         return sum([int(c) for c in self.projects[self.projects["project_id"].isin(projects)]["cost"]])
 
     def rank(self, voter, project):
+        """
+        Returns the rank of the given project in the voter's preference list.
+        """
         r = 1
         for i in range(len(self.pp[voter])):
             if project in self.pp[voter][i]:
@@ -37,6 +54,9 @@ class PB:
     
     #generate all possible feasible subsets of projects
     def generate_f(self):
+        """
+        Generates all possible feasible subsets of projects.
+        """
         possible_s = ()
         for i in range(0, len(self.A)+1):
             for subset in itertools.combinations(self.A, i):
