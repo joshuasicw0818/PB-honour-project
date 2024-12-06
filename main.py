@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from evaluation import *
 
 from pb_instance import PB
 from rules.atr import ATR
@@ -70,5 +71,5 @@ atr = ATR("|.|")
 pbcc = PBCC()
 rsg = RSG(1, 1)
 
-print(pb.pp)
-print(rsg.apply(pb))
+rules = [atr, pbcc, rsg]
+print(generateTable(pb, rules))

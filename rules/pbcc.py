@@ -30,7 +30,7 @@ class PBCC(Rule):
             # Calculate utility for each voter
             for i in pb.N:
                 # Find the minimum rank of any project in the subset for the current voter
-                r = min([pb.rank(i, p) for p in s], default=float('inf'))
+                r = min([pb.rank(i, p) for p in s if pb.rank(i, p)], default=float('inf'))
 
                 # Add the utility contribution from this voter
                 util += pb.m - r

@@ -43,7 +43,7 @@ class ATR(Rule):
                     over.append(p)
 
             appr_votes[voter].extend(over)  # Add the remaining feasible projects
-        
+
         # Maximize utility based on the approval votes
         return self.maximize(appr_votes, pb)
 
@@ -64,7 +64,6 @@ class ATR(Rule):
         # Loop through all feasible subsets of projects
         for s in pb.f:
             total_u = 0  # Initialize the total utility for this subset
-
             # Calculate the utility for each voter
             for i in pb.N:
                 inter = set(appr_votes[i]).intersection(s)  # Intersection of approval votes and the subset

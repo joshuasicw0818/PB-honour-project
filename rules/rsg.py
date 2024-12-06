@@ -64,7 +64,7 @@ class RSG(Rule):
         # Iterate over possible ranks to find the smallest rank j that satisfies the share
         for j in range(1, pb.m + 1):
             # Find the projects in the subset with rank <= j for this voter
-            inter = (p for p in s if pb.rank(voter, p) <= j)
+            inter = (p for p in s if pb.rank(voter, p) and pb.rank(voter, p) <= j)
 
             # Check if the total cost of these projects meets or exceeds the share
             if pb.cS(inter) >= self.share:

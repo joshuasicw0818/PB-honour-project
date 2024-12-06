@@ -46,11 +46,11 @@ class PB:
         Returns the rank of the given project in the voter's preference list.
         """
         r = 1
-        for i in range(len(self.pp[voter])):
-            if project in self.pp[voter][i]:
+        for e_c in self.pp[voter]:
+            if project in e_c:
                 return r
-            r += len(self.pp[voter][i])
-        return r
+            r += len(e_c)
+        return None
     
     #generate all possible feasible subsets of projects
     def generate_f(self):
