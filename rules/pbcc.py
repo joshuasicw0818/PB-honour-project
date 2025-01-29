@@ -10,7 +10,7 @@ class PBCC(Rule):
     that maximizes a utility function based on the consensus criterion.
     """
     
-    def apply(self, pb):
+    def apply(self, pb, rsg=False,rank=None, share=None):
         """
         Applies the PBCC rule to a given participatory budgeting instance.
 
@@ -23,8 +23,14 @@ class PBCC(Rule):
         best_s = []  # List to store the best subsets
         best_u = -float('inf')  # Initialize the best utility as negative infinity
 
+        # feasible subsets
+        f = pb.f
+        # If rank and share are provided, apply the RSG rule to get the feasible subsets
+        if rsg:
+            f = pb.rsg_f(rank, share)
+
         # Iterate through all feasible subsets of projects
-        for s in pb.f:
+        for s in f:
             util = 0  # Initialize utility for the current subset
 
             # Calculate utility for each voter

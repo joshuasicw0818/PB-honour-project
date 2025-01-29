@@ -11,7 +11,7 @@ class ATR(Rule):
         """
         self.f = f
 
-    def apply(self, pb):
+    def apply(self, pb, rsg=False, rank=None, share=None):
         """
         Apply the approval translation rule (ATR) to the given participatory budgeting (PB) instance.
         Steps:
@@ -29,11 +29,14 @@ class ATR(Rule):
         # Loop through each voter in the PB instance
         for voter in pb.N:
             appr_votes[voter] = []  # Initialize the list of approved projects for this voter
-            j = 1  # Start with the first rank in the preference profile
+            j = 0  # Start with the first rank in the preference profile
 
             # Add projects while staying within the budget
-            while pb.cS(appr_votes[voter]) + pb.cS(pb.pp[voter][j-1]) <= pb.L:
-                appr_votes[voter].extend(pb.pp[voter][j-1])  # Add projects from the current rank
+            
+            while pb.cS(appr_votes[voter]) + pb.cS(pb.pp[voter][j]) <= pb.L:
+                appr_votes[voter].extend(pb.pp[voter][j])  # Add projects from the current rank
+                if j+1 == len(pb.pp[voter]):
+                    break
                 j += 1
 
             # Check remaining projects in the current rank for partial inclusion
@@ -45,9 +48,9 @@ class ATR(Rule):
             appr_votes[voter].extend(over)  # Add the remaining feasible projects
 
         # Maximize utility based on the approval votes
-        return self.maximize(appr_votes, pb)
+        return self.maximize(appr_votes, pb, rsg, rank, share)
 
-    def maximize(self, appr_votes, pb):
+    def maximize(self, appr_votes, pb, rsg, rank, share):
         """
         Find the feasible subset of projects that maximizes the utility function.
 
@@ -61,8 +64,14 @@ class ATR(Rule):
         best_s = []  # List to store the best subsets
         best_u = -float('inf')  # Initialize the best utility as negative infinity
 
+        # feasible subsets
+        f = pb.f
+        # If rank and share are provided, apply the RSG rule to get the feasible subsets
+        if rsg:
+            f = pb.rsg_f(rank, share)
+
         # Loop through all feasible subsets of projects
-        for s in pb.f:
+        for s in f:
             total_u = 0  # Initialize the total utility for this subset
             # Calculate the utility for each voter
             for i in pb.N:
@@ -84,3 +93,6 @@ class ATR(Rule):
                 best_s.append(s)  # Add to the list of subsets with the same utility
 
         return best_s  # Return the subset(s) with the highest utility
+    
+    def __str__(self):
+        return "ATR-" + self.f

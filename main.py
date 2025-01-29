@@ -5,7 +5,6 @@ from evaluation import *
 from pb_instance import PB
 from rules.atr import ATR
 from rules.pbcc import PBCC
-from rules.rsg import RSG
 
 def parse_pb_file(filename):
     # Initialize dictionaries and lists to store metadata, projects, and votes
@@ -64,12 +63,20 @@ def parse_pb_file(filename):
     # Return the parsed data: metadata as a dictionary, projects as a DataFrame, and votes as a DataFrame
     return metadata, pd.DataFrame(projects), pd.DataFrame(votes)
 
-metadata, projects, voters = parse_pb_file('datasets/worldwide_mechanical-turk_ranking-value-7_.pb')
+def parse_gen_voters(datafile, voterfile):
+    metadata, projects, _ = parse_pb_file('datasets/pb_data')
+    voters = pd.read_csv(voterfile)
 
-pb = PB(metadata, projects, voters)
-atr = ATR("|.|")
-pbcc = PBCC()
-rsg = RSG(1, 1)
+    return metadata, projects, voters
 
-rules = [atr, pbcc, rsg]
-print(generateTable(pb, rules))
+if __name__ == "__main__":
+    # metadata, projects, voters = parse_pb_file("datasets/test.pb")
+    metadata, projects, voters = parse_gen_voters("datasets/pb_data", "datasets/generated/gen1.csv")
+
+    pb = PB(metadata, projects, voters)
+    w_df, p_df, rsg_dfs = generateTables(pb)
+    w_df.to_csv("output/welfare.csv")
+    p_df.to_csv("output/p_mean.csv")
+
+    for r_name, rsg_df in rsg_dfs.items():
+        rsg_df.to_csv(f"output/rsg/{r_name}.csv")
