@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from evaluation import *
+import os
 
 from pb_instance import PB
 from rules.atr import ATR
@@ -64,19 +65,39 @@ def parse_pb_file(filename):
     return metadata, pd.DataFrame(projects), pd.DataFrame(votes)
 
 def parse_gen_voters(datafile, voterfile):
+    """
+    Parse the PB instance from the given datafile and the generated voters from the voterfile.
+    """
     metadata, projects, _ = parse_pb_file('datasets/pb_data')
     voters = pd.read_csv(voterfile)
 
     return metadata, projects, voters
 
+def ouputTables(data, voterfiles, folder_names):
+    for voterfile, folder_name in zip(voterfiles, folder_names):
+        metadata, projects, voters = parse_gen_voters(data, voterfile)
+        folder = f"output/{folder_name}"
+
+        # create the folder if dont exist
+        print("Creating output folders... ")
+        try:
+            os.makedirs(folder)
+        except FileExistsError:
+            pass
+        try:
+            os.makedirs(f"{folder}/rsg")
+        except FileExistsError:
+            pass
+
+        pb = PB(metadata, projects, voters)
+        w_df, p_df, rsg_dfs = generateTables(pb)
+        w_df.to_csv(f"{folder}/welfare.csv")
+        p_df.to_csv(f"{folder}/projects.csv")
+
+        for r_name, rsg_df in rsg_dfs.items():
+            rsg_df.to_csv(f"{folder}/rsg/{r_name}.csv")
+
 if __name__ == "__main__":
-    # metadata, projects, voters = parse_pb_file("datasets/test.pb")
-    metadata, projects, voters = parse_gen_voters("datasets/pb_data", "datasets/generated/gen1.csv")
-
-    pb = PB(metadata, projects, voters)
-    w_df, p_df, rsg_dfs = generateTables(pb)
-    w_df.to_csv("output/welfare.csv")
-    p_df.to_csv("output/p_mean.csv")
-
-    for r_name, rsg_df in rsg_dfs.items():
-        rsg_df.to_csv(f"output/rsg/{r_name}.csv")
+    voterfiles = ["datasets/generated/gen1.csv", "datasets/generated/gen2.csv"]
+    folder_names = ["gen1", "gen2"]
+    ouputTables("datasets/pb_data", voterfiles, folder_names)
