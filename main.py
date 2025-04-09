@@ -68,7 +68,7 @@ def parse_gen_voters(datafile, voterfile):
     """
     Parse the PB instance from the given datafile and the generated voters from the voterfile.
     """
-    metadata, projects, _ = parse_pb_file('datasets/pb_data')
+    metadata, projects, _ = parse_pb_file(datafile)
     voters = pd.read_csv(voterfile)
 
     return metadata, projects, voters
@@ -79,7 +79,6 @@ def ouputTables(data, voterfiles, folder_names):
         folder = f"output/{folder_name}"
 
         # create the folder if dont exist
-        print("Creating output folders... ")
         try:
             os.makedirs(folder)
         except FileExistsError:
@@ -88,16 +87,25 @@ def ouputTables(data, voterfiles, folder_names):
             os.makedirs(f"{folder}/rsg")
         except FileExistsError:
             pass
-
+        
+        print(f"----Generating tables for {folder_name}----".center(50, "-"))
+        
+        # instantiate the PB class
         pb = PB(metadata, projects, voters)
-        w_df, p_df, rsg_dfs = generateTables(pb)
-        w_df.to_csv(f"{folder}/welfare.csv")
-        p_df.to_csv(f"{folder}/projects.csv")
 
+        # get the comparison tables
+        w_df, p_df, rsg_dfs = generateTables(pb)
+        
+        # save the tables to csv
+        w_df.to_csv(f"{folder}/welfare.csv")
+        p_df.to_csv(f"{folder}/pmean.csv")
+
+        # save the rsg tables to csv
         for r_name, rsg_df in rsg_dfs.items():
             rsg_df.to_csv(f"{folder}/rsg/{r_name}.csv")
+        print(f"----Tables for {folder_name} generated----".center(50, "-"))
 
-if __name__ == "__main__":
-    voterfiles = ["datasets/generated/gen1.csv", "datasets/generated/gen2.csv"]
-    folder_names = ["gen1", "gen2"]
-    ouputTables("datasets/pb_data", voterfiles, folder_names)
+if __name__ == "__main__": 
+    voterfiles = ["datasets/stanford_2021/generated/stanford2021.csv", "datasets/stanford_2021/generated/stanford2021_tight.csv"]
+    folder_names = ["stanford_2021", "stanford_2021_tight"]
+    ouputTables("datasets/stanford_2021/us_stanford-dataset_south-lake-tahoe-2021-quadrant-3_vote-knapsacks.pb", voterfiles, folder_names)

@@ -1,9 +1,11 @@
+from concurrent.futures import ThreadPoolExecutor
 from pb_instance import PB
 import numpy as np
 import pandas as pd
 from rules.atr import ATR
 from rules.pbcc import PBCC
-from colorama import Fore, Style, init
+from colorama import Fore, Style, init\
+    
 init(autoreset=True)
 def utilitarianWelfare(pb, selected_subsets):
     """
@@ -11,18 +13,22 @@ def utilitarianWelfare(pb, selected_subsets):
     """
     total_utility = 0
 
+    # Loop over each selected subset
     for s in selected_subsets:
         for voter in pb.N:
             # Utility = count of approved projects
-            total_utility += sum([1 for p in s if pb.rank(voter, p)]) 
-    return total_utility / len(selected_subsets)
+            total_utility += sum([1 for p in s if pb.rank(voter, p)])
+            
+    # Return the average utility for each voter across all selected subsets
+    return total_utility / (len(selected_subsets) * pb.n) if selected_subsets else 0
 
 def egalitarianWelfare(pb, selected_subsets):
     """
     Calculate the egalitarian welfare: minimum utility for any voter.
     """
-    # Minimum total utility across all selected subsets
-    min_total_utility = float('inf')
+    # The average Minimum total utility of selected subsets
+    min_utilities = []
+
     for s in selected_subsets:
         # List to store utilities for each voter in the current subset
         utilities = []
@@ -30,8 +36,13 @@ def egalitarianWelfare(pb, selected_subsets):
             # Utility = count of approved projects
             utility = sum([1 for p in s if pb.rank(voter, p)])
             utilities.append(utility)
-        min_total_utility = min(min_total_utility, min(utilities))
-    return min_total_utility
+
+        # Store the minimum utility for this subset
+        min_utilities.append(min(utilities))
+        # print min and max
+
+    # Return the average minimum utility across all best subsets
+    return sum(min_utilities) / len(min_utilities)
 
 def nashWelfare(pb, selected_subsets):
     """
@@ -40,7 +51,8 @@ def nashWelfare(pb, selected_subsets):
     For each subset, the utility for each voter is the number of projects they approve.
     The function returns the geometric mean of utilities for all voters across all subsets.
     """
-    avg_nash_welfare = 0  # Initialize the total nash welfare
+    avg_nash = 0  # Initialize the total nash welfare
+    epsilon = 1e-6  # Small value to avoid log(0)
 
     # Loop over each selected subset
     for s in selected_subsets:
@@ -50,12 +62,20 @@ def nashWelfare(pb, selected_subsets):
         # Calculate the utility for each voter in the current subset
         for voter in pb.N:
             # Utility for this voter is the number of projects they approve in the subset
-            utilities.append(sum([1 for project in s if pb.rank(voter, project)]))
+            util = sum([1 for project in s if pb.rank(voter, project)])
+            if util == 0:
+                utilities.append(epsilon)  # Avoid log(0) by using epsilon
+            
+            utilities.append(util)  # Append the utility for this voter
+        
+        utilities = np.array(utilities, dtype=np.float64)  # Convert to numpy array for numerical stability
         
         # Calculate the geometric mean of utilities for the current subset
-        product = np.prod(np.array(utilities, dtype=np.float64))
-        avg_nash_welfare += product ** (1 / pb.n)  # Geometric mean of utilities
-    return avg_nash_welfare / len(selected_subsets) if selected_subsets else 0
+        nash = np.exp(np.mean(np.log(utilities + epsilon)))  # Add epsilon to avoid log(0)
+        avg_nash += nash
+
+    # get the average nash welfare across all selected subsets
+    return avg_nash / len(selected_subsets) if selected_subsets else 0
 
 
 def pMeanWelfare(pb, selected_subsets, p):
@@ -69,71 +89,37 @@ def pMeanWelfare(pb, selected_subsets, p):
 
     # Loop over each selected subset
     for s in selected_subsets:
-        # List to store utilities for each voter in the current subset
-        utilities = []
-
-        # Calculate the utility for each voter in the current subset
-        for voter in pb.N:
+        
+        # np array to store utilities for each voter in the current subset
+        utils = np.array([
             # Utility for this voter is the number of projects they approve in the subset
-            utilities.append(sum([1 for project in s if pb.rank(voter, project)]))
+            sum([1 for project in s if pb.rank(voter, project)]) or 1e-6  # Avoid zero utility
+            for voter in pb.N
+        ], dtype=np.float64)  # Convert to numpy array for numerical stability
 
         # Calculate the p-mean of utilities for the current subset
         if p == 0:
-            # When p=0, use the geometric mean
-            product = np.prod(np.array(utilities, dtype=np.float64))
-            avg_pmean_welfare += product ** (1 / len(utilities))
+            # Geometric mean (log space)
+            pmean = np.exp(np.mean(np.log(utils)))
         else:
-            avg_pmean_welfare += (sum([u ** p for u in utilities]) / len(utilities)) ** (1 / p)
+            # For other values of p, use the generalized mean
+            pmean = (np.mean(utils ** p)) ** (1 / p)
+        avg_pmean_welfare += pmean
 
-    return avg_pmean_welfare / len(selected_subsets) 
-
-def proportionality(pb, selected_subsets):
-    groups = list(pb.voters["sex"].unique()) + list(pb.voters["education"].unique())
-    groups_pd = pd.DataFrame(index=groups, columns=['count','budg_repped',"seen","prop"])
-
-    for sex in pb.voters["sex"].unique():
-        count = pb.voters[pb.voters["sex"] == sex].shape[0]
-        groups_pd.loc[sex,"count"] = count
-    for education in pb.voters["education"].unique():
-        count = pb.voters[pb.voters["education"] == education].shape[0]
-        groups_pd.loc[education,"count"] = count
-    groups_pd["prop"] = [[] for i in range(len(groups_pd))]
-    
-    # Iterate through each selected subset of projects
-    for s in selected_subsets:
-        groups_pd["budg_repped"] = 0
-        groups_pd["seen"] = [[] for i in range(len(groups_pd))]
-
-        # assign budgets to groups
-        for p in s:
-            for voter in pb.N:
-                if pb.rank(voter, p): # If the voter ranks the project
-                    for group in groups_pd.index:
-                        # If the project has not been allocated to this group yet
-                        if p not in groups_pd.loc[group,"seen"]:
-                            # Add the cost of the project to the group's budget representation
-                            groups_pd.loc[group,"budg_repped"] += pb.c(p)
-                            groups_pd.loc[group,"seen"].append(p)
-                
-        for group in groups_pd.index:
-            if groups_pd.loc[group,"count"] > 0:
-                group_frac = groups_pd.loc[group,"count"] / pb.n
-                budg_frac = groups_pd.loc[group,"budg_repped"] / pb.L
-
-                groups_pd.loc[group,"prop"].append(budg_frac / group_frac)
-    groups_pd["prop"] = [np.mean(groups_pd.loc[group,"prop"]) for group in groups_pd.index]
-    return np.mean(groups_pd["prop"])
+    # Return the average p-mean welfare across all selected subsets
+    # If selected_subsets is empty, return 0 to avoid division by zero
+    return avg_pmean_welfare / len(selected_subsets) if selected_subsets else 0
 
 def getRuleMetrics(pb, selected_subsets):
     w_metrics = {
         'Utilitarian': utilitarianWelfare(pb, selected_subsets),
         'Egalitarian': egalitarianWelfare(pb, selected_subsets),
         'Nash': nashWelfare(pb, selected_subsets),
-        'AVG Prop': proportionality(pb, selected_subsets)
+        'P(0.2) Mean': pMeanWelfare(pb, selected_subsets, 0.2)
     }
     return w_metrics
 
-def generateTables(pb):
+def generateTables(pb: PB):
     """
     Generate all tables of metric values for each rule applied to the PB instance.
 
@@ -155,40 +141,69 @@ def generateTables(pb):
 
     # Generate welfare table
     print(Fore.YELLOW + "Generating welfare table...")
-    w_df = pd.DataFrame(columns=['Utilitarian', 'Egalitarian', 'Nash', 'AVG Prop'])
-    rsg_ratios = [1,2,5]
+    
+    # Create a DataFrame to store welfare metrics
+    w_df = pd.DataFrame(columns=['Utilitarian', 'Egalitarian', 'Nash', 'P(0.2) Mean'])
+    
+    # iterate through each rule and calculate the metrics
     for r_name, rule in rules.items():
+        print(Fore.LIGHTCYAN_EX + f"    Generating {r_name} welfare table...")
+        # Apply the rule to get the selected subsets
         w_df.loc[r_name] = getRuleMetrics(pb, rule.apply(pb))
-        for rsg_r in rsg_ratios:
-            w_df.loc[f"{r_name} RSG(1/{rsg_r})"] = getRuleMetrics(pb, rule.apply(pb, True, pb.m//rsg_r, pb.L/pb.n))
+        
     print(Fore.GREEN + "Welfare table generated.")
     
-    print("Generating RSG tables...")
+    print(Fore.YELLOW + "Generating RSG tables...")
     rsg_dfs = {}
     # range of k values to test
-    k_range = [k for k in range(1,11)]
 
+    k_set = [1, 2, 3, 4, 5, 7, 10]
+    #get avg cost of projects
+    avg_cost = pb.cS(pb.A) / pb.m
+    
     for r_name, rule in rules.items():
-        df = pd.DataFrame(columns=['Utilitarian', 'Egalitarian', 'Nash', 'AVG Prop'])
+        df = pd.DataFrame(columns=['Utilitarian', 'Egalitarian', 'Nash', 'P(0.2) Mean'])
         df.index.name = 'k'
-        for k in k_range:
-            # share set to L/n
-            selected_subsets = rule.apply(pb, True, pb.m//k , pb.L/pb.n)
-            df.loc[f"1/{k}"] = getRuleMetrics(pb, selected_subsets)
-        rsg_dfs[r_name] = df
-        print(Fore.YELLOW + f"{r_name} RSG table generated.")
-    print(Fore.GREEN + "RSG tables generated.")
 
-    print("Generating p-mean welfare table...")
-    # Generate p-mean welfare table
-    p_vals = np.linspace(0, 1, 11)
+        for k in k_set:
+            # share set to L/n
+            selected_subsets = rule.apply(pb, True, k , pb.L/pb.m)
+                     
+            # Calculate the welfare metrics for each k value
+            df.loc[f"Top-{k}"] = getRuleMetrics(pb, selected_subsets)
+        rsg_dfs[r_name] = df
+        print(Fore.LIGHTCYAN_EX + f"  {r_name} RSG table generated.")
+    print(Fore.GREEN + "RSG tables generated.")
+    
+    """ 
+    Generate p-mean welfare table, 
+        showing p-mean welfare for p values from 0 to 1 for each rule
+    """
+    print(Fore.YELLOW + "Generating p-mean welfare table...")
+    p_vals = [0.0, 0.2, 0.5, 1.0]
+    # Create a DataFrame to store p-mean welfare metrics
     p_df = pd.DataFrame(columns=[f'{p:.1f}' for p in p_vals])
 
+    # iterate through each rule and calculate the metrics
     for r_name, rule in rules.items():
+        print(Fore.LIGHTCYAN_EX + f"    Generating {r_name} p-mean welfare table...")
+        # Apply the rule to get the selected subsets
         selected_subsets = rule.apply(pb)
-        p_metrics = {}
-        for p in p_vals:
-            p_metrics[f'{p:.1f}'] = pMeanWelfare(pb, selected_subsets, p)
+        
+        # helper function to compute p-mean welfare for each p value
+        def compute_pmean(p):
+            # Calculate the p-mean welfare for the current p value
+            return f'{p:.1f}', pMeanWelfare(pb, selected_subsets, p)
+        
+        # Use multithreading to compute p-mean for each p
+        with ThreadPoolExecutor() as executor:
+            results = list(executor.map(compute_pmean, p_vals))
+        
+        # Convert the results to a dictionary
+        p_metrics = {
+            p: metric for p, metric in results
+        }
+        # Add the metrics for that rule to the DataFrame
         p_df.loc[r_name] = p_metrics
     print(Fore.GREEN + "p-mean welfare table generated.")
     return w_df, p_df, rsg_dfs

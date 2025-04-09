@@ -1,48 +1,46 @@
 from random import randint,sample
 from main import parse_pb_file
+import os
 
-
-def generatePB(pbfile, filename, vote_range, rank_range):
+# This script generates weak ranks for voters from a PB instance.
+def genWeakRanks(pbfile, filename, rank_range):
     metadata, projects, voters = parse_pb_file(pbfile)
 
-    for voter in voters["voter_id"].values:
-        vote = voters[voters["voter_id"] == voter]["vote"].values[0].split(",")
-        vote_size = min(randint(vote_range[0], vote_range[1]), len(vote))
-        
-        vote = vote[0:vote_size]
-        i = 0
+    print("Generating weak ranks...")
+    
+    for count, voter in enumerate(voters["voter_id"].values, start=1):
+        # Print progress every 25% of the voters
+        if count % int(len(voters) / 4) == 0:
+            print(f"Voter: {count}/{len(voters)}")
+
+        # split vote string into list
+        vote = voters.loc[voters["voter_id"] == voter, "vote"].values[0].split(",")
+        remaining = vote.copy()
         e_classes = []
-        while i < len(vote):
-            rank_size = min(randint(rank_range[0], rank_range[1]), len(vote) - i)
-            e_class = vote[i:i + rank_size]
+
+        while remaining:
+            # Randomly select a size for the equivalence class
+            rank_size = min(randint(rank_range[0], rank_range[1]), len(remaining))
+            # Randomly select items for the equivalence class
+            e_class = sample(remaining, rank_size)
             e_classes.append(e_class)
-            i += rank_size
-        # make voter vote to e_class
-        voters.loc[voters["voter_id"] == voter, "vote"] = '|'.join([','.join(e_class) for e_class in e_classes])
+            # remove used items
+            remaining = [v for v in remaining if v not in e_class]
 
-    voters.to_csv(f"datasets/generated/{filename}.csv", index=False)
-
-def genRandPB(pbfile, filename, vote_range, rank_range):
-    metadata, projects, voters = parse_pb_file(pbfile)
-
-    for voter in voters["voter_id"].values:
-        vote_size = min(randint(vote_range[0], vote_range[1]), len(vote))
-        vote = sample(projects["project_id"].values, vote_size)
-        
-        i = 0
-        e_classes = []
-        while i < len(vote):
-            rank_size = min(randint(rank_range[0], rank_range[1]), len(vote) - i)
-            e_class = vote[i:i + rank_size]
-            e_classes.append(e_class)
-            i += rank_size
-        # make voter vote to e_class
-        voters.loc[voters["voter_id"] == voter, "vote"] = '|'.join([','.join(e_class) for e_class in e_classes])
-
-    voters.to_csv(f"datasets/generated/{filename}.csv", index=False)
+        # Join into weak ranking format: E1|E2|E3...
+        voters.loc[voters["voter_id"] == voter, "vote"] = '|'.join([','.join(e) for e in e_classes])
+    
+    print("Saving generated voters...")
+    # get filepath from pbfile and filename
+    foldername = os.path.basename(os.path.dirname(pbfile))
+    # create generated folder if it doesn't exist
+    os.makedirs(f"datasets/{foldername}/generated", exist_ok=True)
+    
+    output_path = f"datasets/{foldername}/generated/{filename}.csv"
+    
+    voters.to_csv(output_path, index=False)
 
 if __name__ == "__main__":
-    generatePB("datasets/pb_data", "gen2", (2, 8), (1, 3))
-    genRandPB("datasets/pb_data", "gen3", (2, 8), (1, 3))
+    genWeakRanks("datasets/stanford_2021/us_stanford-dataset_south-lake-tahoe-2021-quadrant-3_vote-knapsacks.pb", "stanford2021_tight", (1, 1))
     
-
+    

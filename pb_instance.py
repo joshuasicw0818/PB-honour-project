@@ -5,6 +5,32 @@ import numpy as np
 import concurrent.futures
 from functools import lru_cache
 
+def rsg_satisfaction_worker(args):
+    """
+    worker function to count the number of satisfied voters in a subset for rsg_f
+    Uses a vecotorized approach
+    """
+    subset, k, share, rank_matrix, cost_vector = args
+
+    subset = list(subset)
+    if not subset:
+        return 0
+
+    # Select relevant columns
+    ranks = rank_matrix[:, subset]
+    # mask is 1 if the rank is less than or equal to k, else 0
+    mask = (ranks <= k).astype(int)
+    # Compute the costs of the projects in the subset
+    costs = cost_vector[subset]
+
+    # Compute total cost of approved projects per voter
+    voter_costs = (mask * costs).sum(axis=1)
+    # Check if the total cost meets or exceeds the share
+    satisfied = (voter_costs >= share).sum()
+
+    # Return the number of satisfied voters
+    return satisfied
+
 class PB:
     def __init__(self, metadata, projects, voters):
         """
@@ -19,54 +45,71 @@ class PB:
         self.voters = voters
         self.n = voters.shape[0]
         self.m = projects.shape[0]
-        self.A = projects["project_id"].values
         self.N = voters["voter_id"].values
         self.L = float(metadata['budget'])
+        self.A = projects["project_id"].values
+        
+        # precomputed cost map for each project
+        self.cost_map = {pid: float(cost) for pid, cost in zip(projects["project_id"], projects["cost"])}
+
         self.f = self.generate_f()
 
         #voter preference profile
         self.pp = voters.set_index("voter_id")['vote']
         self.pp = self.pp.str.split('|', expand=False)
-        self.pp = self.pp.apply(lambda x: [s.split(',') for s in x])      
+        self.pp = self.pp.apply(lambda x: [s.split(',') for s in x])   
+        
+        # precomputed rank lookup for each voter and project
+        self.rank_lookup = {
+            (voter, project): rank
+            for voter in self.N
+            for rank, group in enumerate(self.pp[voter], start=1)
+            for project in group
+        } 
+        
+        # store feasible subsets with a specfic rsg applied (k, share)
+        self.cached_rsgs = {} 
 
     #project cost function
     def c(self, project: str):
         """
         Returns the cost of the given project.
         """
-        return float(self.projects[self.projects["project_id"] == project]["cost"].values[0])
+        
+        return self.cost_map[project]
     
     #subset cost function
     def cS(self, projects: List[str]):
         """
         Returns the total cost of the given subset of projects.
         """
-        return sum([int(c) for c in self.projects[self.projects["project_id"].isin(projects)]["cost"]])
+        return sum(self.c(p) for p in projects)
 
     def rank(self, voter, project):
         """
         Returns the rank of the given project in the voter's preference list.
+        If the project is not ranked, returns None.
         """
-        r = 1
-        for e_c in self.pp[voter]:
-            if project in e_c:
-                return r
-            r += len(e_c)
-        return None
+        return self.rank_lookup.get((voter, project), None)
     
     #generate all possible feasible subsets of projects
     def generate_f(self):
         """
         Generates all possible feasible subsets of projects.
         """
-        possible_s = ()
-        for i in range(0, len(self.A)+1):
-            for subset in itertools.combinations(self.A, i):
+        possible_s = []
+        # make a sorted copy of the project list
+        sorted_projects = sorted(self.A, key=lambda pid: self.c(pid))
+        
+        # Iterate through all possible subset sizes
+        for i in range(0, len(sorted_projects)+1):
+            # Generate all combinations of projects of size i
+            for subset in itertools.combinations(sorted_projects, i):
                 s_cost = self.cS(subset)
 
                 if s_cost <= self.L:
-                    possible_s += (subset,)
-                elif s_cost > self.L:
+                    possible_s.append(subset)
+                else:
                     break
         return possible_s
     
@@ -85,17 +128,10 @@ class PB:
                     return j
             return self.m + 1
     
-    # helper function to count the number of satisfied voters in a subset
-    def cntSatisfaction(self, s, k, share):
-            """
-            Count the number of voters satisfied by the subset `s`.
-            This will be run in parallel.
-            """
-            return len([i for i in self.N if self.t(i, s, share) <= k])
-    
     def rsg_f(self, k, share):
         """
         Applies the RSG rule to the PB, returning the best subsets from the feasible set
+        uses a vectorized approach to evaluate the satisfaction of voters
 
         Parameters:
         - k: The maximum rank threshold.
@@ -104,22 +140,61 @@ class PB:
         Returns:
         - A list of subsets (best_s) that maximize the number of satisfied voters.
         """
-        best_s = []  # List to store the best subsets
-        best_size = -float('inf')
+        
+        # Check if the result is already cached
+        if (k, share) in self.cached_rsgs.keys():
+            return self.cached_rsgs[(k, share)]
 
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            results = executor.map(lambda s: self.cntSatisfaction(s, k, share), self.f)
+        # project ID to index mapping
+        pid_to_idx = {pid: i for i, pid in enumerate(self.A)}
+        
+        # Build voter ID → index
+        vid_to_idx = {vid: i for i, vid in enumerate(self.N)}
+        
+        cost_vector = np.array([self.c(pid) for pid in self.A]) 
+        
+        # Initialize rank_matrix with default m+1
+        rank_matrix = np.full((len(self.N), len(self.A)), self.m + 1, dtype=int)
 
-        for s, cnt in zip(self.f, results):
-            if cnt > best_size:
-                best_size = cnt
-                best_s = [s]
-            elif cnt == best_size:
-                best_s.append(s)
+        # Fill it using rank_lookup
+        for (voter, project), rank in self.rank_lookup.items():
+            if project in pid_to_idx and voter in vid_to_idx:
+                v_idx = vid_to_idx[voter]
+                p_idx = pid_to_idx[project]
+                rank_matrix[v_idx, p_idx] = rank
 
-        return best_s 
-    
+        # Map subsets to index-based tuples
+        subset_args = [
+            (
+                [pid_to_idx[p] for p in subset],  # index-based subset
+                k,
+                share,
+                rank_matrix,
+                cost_vector
+            )
+            for subset in self.f
+        ]
 
+        # Vectorized evaluation
+        best_s = []
+        best_score = -float('inf')
+
+        with concurrent.futures.ProcessPoolExecutor() as executor:
+            # Map the worker function to the subset arguments
+            results = executor.map(rsg_satisfaction_worker, subset_args)
+            # Iterate through the results and find the best subsets
+            for s, score in zip(self.f, results):
+                # if the score is better than the best score, update the best score and best_s
+                if score > best_score:
+                    best_score = score
+                    best_s = [s]
+                elif score == best_score:
+                    best_s.append(s)
+                    
+        # Cache the result
+        self.cached_rsgs[(k, share)] = best_s
+
+        return best_s
     
 
 

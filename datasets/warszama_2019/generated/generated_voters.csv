@@ -1,0 +1,9 @@
+voter_id,vote,age,sex,voting_method,neighborhood
+16,"643,1603|1501",46,F,internet,Ursynów Północny
+34,"1462,1072|1644,1043,1603|210,639|645,637|643|1949,1018|1534|1501,1619|1027,641|1787|344,1075",32,M,internet,Ursynów Północny
+52,"1534,344|926,1072,210|1027",43,M,internet,Ursynów Południowy
+60,"1462|1072|926|344,637|1043|210|1534|643,1644|1027|645,1619,1075|1603,641",29,F,internet,Zielony Ursynów
+63,643|637,32,F,internet,Zielony Ursynów
+64,"1075,344|1027|1462",43,M,internet,Ursynów Południowy
+75,"344,1072,1018|1534,1619,643|637,1644",42,M,internet,Ursynów Północny
+76,"344|641,1018|1603|1072|1501,1027,1534|1075,1619,637|1644",43,M,internet,Ursynów Południowy

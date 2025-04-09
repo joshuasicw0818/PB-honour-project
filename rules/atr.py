@@ -28,11 +28,11 @@ class ATR(Rule):
 
         # Loop through each voter in the PB instance
         for voter in pb.N:
+            # print at 10% intervals
             appr_votes[voter] = []  # Initialize the list of approved projects for this voter
             j = 0  # Start with the first rank in the preference profile
 
             # Add projects while staying within the budget
-            
             while pb.cS(appr_votes[voter]) + pb.cS(pb.pp[voter][j]) <= pb.L:
                 appr_votes[voter].extend(pb.pp[voter][j])  # Add projects from the current rank
                 if j+1 == len(pb.pp[voter]):
@@ -70,12 +70,14 @@ class ATR(Rule):
         if rsg:
             f = pb.rsg_f(rank, share)
 
+        # Precompute sets for fast intersection
+        appr_sets = {voter: set(appr_votes[voter]) for voter in pb.N}
         # Loop through all feasible subsets of projects
         for s in f:
             total_u = 0  # Initialize the total utility for this subset
             # Calculate the utility for each voter
             for i in pb.N:
-                inter = set(appr_votes[i]).intersection(s)  # Intersection of approval votes and the subset
+                inter = appr_sets[i].intersection(s)  # Intersection of approval votes and the subset
 
                 # Compute utility based on the specified utility function
                 if self.f == "|.|":
