@@ -3,7 +3,7 @@ from main import parse_pb_file
 import os
 
 # This script generates weak ranks for voters from a PB instance.
-def genWeakRanks(pbfile, filename, rank_range):
+def genWeakRanks(pbfile, filename, vote_range, rank_range):
     metadata, projects, voters = parse_pb_file(pbfile)
 
     print("Generating weak ranks...")
@@ -16,6 +16,11 @@ def genWeakRanks(pbfile, filename, rank_range):
         # split vote string into list
         vote = voters.loc[voters["voter_id"] == voter, "vote"].values[0].split(",")
         remaining = vote.copy()
+        
+        # Making sure the vote range is within the number of items
+        range = min(vote_range[0], len(remaining)), min(vote_range[1], len(remaining))
+        # randomly change size of vote
+        remaining = remaining[:randint(vote_range[0], vote_range[1])]
         e_classes = []
 
         while remaining:
@@ -39,8 +44,10 @@ def genWeakRanks(pbfile, filename, rank_range):
     output_path = f"datasets/{foldername}/generated/{filename}.csv"
     
     voters.to_csv(output_path, index=False)
+    
+
 
 if __name__ == "__main__":
-    genWeakRanks("datasets/stanford_2021/us_stanford-dataset_south-lake-tahoe-2021-quadrant-3_vote-knapsacks.pb", "stanford2021_tight", (1, 1))
+    genWeakRanks("datasets/worldwide_turk7/worldwide_mechanical-turk_ranking-value-money-7.pb", "turk7", (3, 20), (1, 3))
     
     

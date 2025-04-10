@@ -4,10 +4,15 @@ import numpy as np
 import pandas as pd
 from rules.atr import ATR
 from rules.pbcc import PBCC
-from colorama import Fore, Style, init\
+from colorama import Fore, Style, init
     
-init(autoreset=True)
-def utilitarianWelfare(pb, selected_subsets):
+def getUtility(pb: PB, subset, voter):
+    """
+    Calculate the utility of a voter for a given subset of projects.
+    """
+    return sum([1/pb.rank(voter,p) for p in subset if pb.rank(voter, p)])
+
+def utilitarianWelfare(pb: PB, selected_subsets):
     """
     Calculate the utilitarian welfare: sum of utilities for all voters.
     """
@@ -17,8 +22,8 @@ def utilitarianWelfare(pb, selected_subsets):
     for s in selected_subsets:
         for voter in pb.N:
             # Utility = count of approved projects
-            total_utility += sum([1 for p in s if pb.rank(voter, p)])
-            
+            # total_utility += sum([1 for p in s if pb.rank(voter, p)])
+            total_utility += getUtility(pb, s, voter)  # Calculate utility for this voter in the subset
     # Return the average utility for each voter across all selected subsets
     return total_utility / (len(selected_subsets) * pb.n) if selected_subsets else 0
 
@@ -34,7 +39,7 @@ def egalitarianWelfare(pb, selected_subsets):
         utilities = []
         for voter in pb.N:
             # Utility = count of approved projects
-            utility = sum([1 for p in s if pb.rank(voter, p)])
+            utility = getUtility(pb, s, voter)  # Calculate utility for this voter in the subset
             utilities.append(utility)
 
         # Store the minimum utility for this subset
@@ -44,7 +49,7 @@ def egalitarianWelfare(pb, selected_subsets):
     # Return the average minimum utility across all best subsets
     return sum(min_utilities) / len(min_utilities)
 
-def nashWelfare(pb, selected_subsets):
+def nashWelfare(pb: PB, selected_subsets):
     """
     Calculate Nash welfare: the geometric mean of individual utilities across all selected subsets.
     
@@ -62,7 +67,7 @@ def nashWelfare(pb, selected_subsets):
         # Calculate the utility for each voter in the current subset
         for voter in pb.N:
             # Utility for this voter is the number of projects they approve in the subset
-            util = sum([1 for project in s if pb.rank(voter, project)])
+            util = getUtility(pb, s, voter)  # Calculate utility for this voter in the subset
             if util == 0:
                 utilities.append(epsilon)  # Avoid log(0) by using epsilon
             
@@ -78,7 +83,7 @@ def nashWelfare(pb, selected_subsets):
     return avg_nash / len(selected_subsets) if selected_subsets else 0
 
 
-def pMeanWelfare(pb, selected_subsets, p):
+def pMeanWelfare(pb: PB, selected_subsets, p):
     """
     Calculate p-mean welfare: generalized utility metric across all selected subsets.
     
@@ -93,7 +98,7 @@ def pMeanWelfare(pb, selected_subsets, p):
         # np array to store utilities for each voter in the current subset
         utils = np.array([
             # Utility for this voter is the number of projects they approve in the subset
-            sum([1 for project in s if pb.rank(voter, project)]) or 1e-6  # Avoid zero utility
+            getUtility(pb, s, voter)  # Calculate utility for this voter in the subset
             for voter in pb.N
         ], dtype=np.float64)  # Convert to numpy array for numerical stability
 
@@ -110,7 +115,7 @@ def pMeanWelfare(pb, selected_subsets, p):
     # If selected_subsets is empty, return 0 to avoid division by zero
     return avg_pmean_welfare / len(selected_subsets) if selected_subsets else 0
 
-def getRuleMetrics(pb, selected_subsets):
+def getRuleMetrics(pb: PB, selected_subsets):
     w_metrics = {
         'Utilitarian': utilitarianWelfare(pb, selected_subsets),
         'Egalitarian': egalitarianWelfare(pb, selected_subsets),
@@ -157,20 +162,20 @@ def generateTables(pb: PB):
     rsg_dfs = {}
     # range of k values to test
 
-    k_set = [1, 2, 3, 4, 5, 7, 10]
+    k_set = [1, 2, 3, 4, pb.m]
     #get avg cost of projects
     avg_cost = pb.cS(pb.A) / pb.m
     
     for r_name, rule in rules.items():
         df = pd.DataFrame(columns=['Utilitarian', 'Egalitarian', 'Nash', 'P(0.2) Mean'])
         df.index.name = 'k'
-
+        df.loc['n/a'] = getRuleMetrics(pb, rule.apply(pb))
         for k in k_set:
-            # share set to L/n
-            selected_subsets = rule.apply(pb, True, k , pb.L/pb.m)
+            # set share
+            selected_subsets = rule.apply(pb, True, k , avg_cost)
                      
             # Calculate the welfare metrics for each k value
-            df.loc[f"Top-{k}"] = getRuleMetrics(pb, selected_subsets)
+            df.loc[f"{k}"] = getRuleMetrics(pb, selected_subsets)
         rsg_dfs[r_name] = df
         print(Fore.LIGHTCYAN_EX + f"  {r_name} RSG table generated.")
     print(Fore.GREEN + "RSG tables generated.")
@@ -180,7 +185,7 @@ def generateTables(pb: PB):
         showing p-mean welfare for p values from 0 to 1 for each rule
     """
     print(Fore.YELLOW + "Generating p-mean welfare table...")
-    p_vals = [0.0, 0.2, 0.5, 1.0]
+    p_vals = [0.0, 0.2, 0.5, 0.8, 1.0]
     # Create a DataFrame to store p-mean welfare metrics
     p_df = pd.DataFrame(columns=[f'{p:.1f}' for p in p_vals])
 
@@ -190,7 +195,7 @@ def generateTables(pb: PB):
         # Apply the rule to get the selected subsets
         selected_subsets = rule.apply(pb)
         
-        # helper function to compute p-mean welfare for each p value
+        # helper function to compute p-mean welfare for meach p value
         def compute_pmean(p):
             # Calculate the p-mean welfare for the current p value
             return f'{p:.1f}', pMeanWelfare(pb, selected_subsets, p)

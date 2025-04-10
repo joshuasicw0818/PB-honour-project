@@ -113,21 +113,6 @@ class PB:
                     break
         return possible_s
     
-    # function to calculate the rank threshold for a given voter and subset
-    @lru_cache(maxsize=None)
-    def t(self, voter, s, share):
-            if self.cS(s) < share:
-                #If the total cost of the subset is less than the share, return a large rank
-                return self.m + 1
-            for j in range(1, self.m + 1):
-                # Find projects in the subset with rank <= j for this voter
-                inter = (p for p in s if self.rank(voter, p) and self.rank(voter, p) <= j)
-
-                # Check if the total cost of these projects meets or exceeds the share
-                if self.cS(inter) >= share:
-                    return j
-            return self.m + 1
-    
     def rsg_f(self, k, share):
         """
         Applies the RSG rule to the PB, returning the best subsets from the feasible set
@@ -172,7 +157,7 @@ class PB:
                 rank_matrix,
                 cost_vector
             )
-            for subset in self.f
+            for subset in self.f # get each feasible subset
         ]
 
         # Vectorized evaluation
